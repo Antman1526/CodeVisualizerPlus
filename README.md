@@ -31,7 +31,7 @@
 
 > **This is a community fork of [CodeVisualizer](https://github.com/DucPhamNgoc08/CodeVisualizer) by [Duc Pham Ngoc](https://github.com/DucPhamNgoc08).**
 > All core architecture, language parsers, flowchart engine, AI label system, and original design are his work.
-> This fork adds Markdown document visualization, improved unsupported-file messages, a working export command, `.md` support in the codebase dependency graph, and an auto README preview.
+> This fork adds Markdown document visualization, improved unsupported-file messages, a working export command, codebase dependency graph support for **Java, C, C++, Rust, Go, and Markdown**, and an auto README preview.
 > Please ⭐ the [original repository](https://github.com/DucPhamNgoc08/CodeVisualizer) if you find this useful.
 
 ---
@@ -72,7 +72,7 @@ CodeVisualizer Plus transforms the way developers understand and navigate code. 
 |------|--------------|
 | **Function Flowchart** | Control flow, decision points, loops, and exception handling inside a single function |
 | **Markdown Structure** | Heading hierarchy (H1 → H2 → H3) and outbound links as an interactive diagram |
-| **Codebase Dependency Graph** | Module-level import/require relationships across your entire project, including `.md` doc links |
+| **Codebase Dependency Graph** | Module-level import/require/include relationships across your entire project — supports JS/TS, Python, Java, C, C++, Rust, Go, and Markdown |
 
 ---
 
@@ -95,9 +95,11 @@ CodeVisualizer Plus transforms the way developers understand and navigate code. 
 
 ### Codebase Dependency Visualization *(enhanced)*
 - Right-click any folder → **"Visualize Codebase Flow"**
-- Now includes `.md` files — document cross-links show up alongside code imports
+- Supports **8 language families**: TypeScript/JavaScript, Python, Java, C, C++, Rust, Go, and Markdown
+- Document cross-links (`.md` files) appear alongside code imports in the same graph
 - Color-coded file categories: Core (green), Report/Docs (pink), Config (blue), Tools (orange), Entry (grey)
 - Subgraphs organized by directory structure
+- Build artifacts skipped automatically (`node_modules`, `target/`, `vendor/`, `dist/`, etc.)
 - **Auto README preview**: if the selected folder has a `README.md`, it opens in VS Code's built-in Markdown preview panel automatically
 
 ### Export Diagrams *(now fully implemented)*
@@ -136,8 +138,11 @@ CodeVisualizer Plus transforms the way developers understand and navigate code. 
 |----------|----------------|--------|
 | TypeScript / JavaScript | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs` | ✅ Full Support |
 | Python | `.py` | ✅ Full Support |
+| **Java** | `.java` | ✅ **Full Support (new)** |
+| **C / C++** | `.c`, `.h`, `.cpp`, `.hpp`, `.cc`, `.cxx` | ✅ **Full Support (new)** |
+| **Rust** | `.rs` | ✅ **Full Support (new)** |
+| **Go** | `.go` | ✅ **Full Support (new)** |
 | **Markdown** | `.md` | ✅ **Full Support (new)** |
-| Java, C++, C, Rust, Go | — | 🔜 Planned |
 
 ---
 
@@ -285,9 +290,16 @@ PNG exports are generated at 2× resolution for crisp display on high-DPI screen
 
 ### Codebase Dependency Pipeline
 
-1. **File Discovery** — Workspace is scanned recursively; `.js`, `.ts`, `.py`, `.md` (and others) are collected
-2. **Dependency Extraction** — Language-specific regex patterns pull import, require, and link statements
-3. **Path Resolution** — Relative and absolute paths are resolved to actual file locations
+1. **File Discovery** — Workspace is scanned recursively; all supported extensions are collected. Build output directories (`node_modules`, `dist`, `build`, `target`, `vendor`) are automatically skipped
+2. **Dependency Extraction** — Language-specific patterns extract dependencies per language:
+   - **JS/TS**: `import … from` and `require()` statements
+   - **Python**: `import` and `from … import` declarations
+   - **Java**: `import com.example.Class;` statements (stdlib skipped)
+   - **C/C++**: local `#include "file.h"` directives (`<system>` headers skipped)
+   - **Rust**: `mod name;` declarations and `use crate::/super::/self::` paths
+   - **Go**: single-line and block `import` statements (stdlib and external packages skipped)
+   - **Markdown**: `[text](./relative/path.md)` links (http/anchor links skipped)
+3. **Path Resolution** — Each dependency is resolved to an absolute file path using language-aware search strategies (Java source roots, C include dirs, Rust `mod.rs` conventions, Go workspace dirs)
 4. **Graph Building** — A directed graph is constructed with files as nodes and dependencies as edges
 5. **Classification** — Files are categorized (Core, Report/Docs, Config, Tool, Entry) by name and path patterns
 6. **Rendering** — An interactive Mermaid flowchart is generated with color-coded nodes and edge styles
