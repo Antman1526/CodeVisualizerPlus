@@ -10,7 +10,7 @@
 
 <br />
 <div align="center">
-  <a href="https://github.com/Antman1526/CodeVisualizer">
+  <a href="https://github.com/Antman1526/CodeVisualizerPlus">
     <img src="media/codevisualizerlogo.png" alt="Logo" width="200" height="200">
   </a>
 
@@ -21,9 +21,9 @@
     <br />
     <a href="https://marketplace.visualstudio.com/items?itemName=DucPhamNgoc.codevisualizer"><strong>Download Original from VS Code Marketplace »</strong></a>
     <br /><br />
-    <a href="https://github.com/Antman1526/CodeVisualizer/issues/new?labels=bug">Report Bug</a>
+    <a href="https://github.com/Antman1526/CodeVisualizerPlus/issues/new?labels=bug">Report Bug</a>
     ·
-    <a href="https://github.com/Antman1526/CodeVisualizer/issues/new?labels=enhancement">Request Feature</a>
+    <a href="https://github.com/Antman1526/CodeVisualizerPlus/issues/new?labels=enhancement">Request Feature</a>
   </p>
 </div>
 
@@ -377,9 +377,9 @@ Distributed under the MIT License. See `LICENSE` for details.
 
 ## Contact
 
-**Fork maintainer:** [Antman1526](https://github.com/Antman1526) — [github.com/Antman1526/CodeVisualizer](https://github.com/Antman1526/CodeVisualizer)
+**Fork maintainer:** [Antman1526](https://github.com/Antman1526) — [github.com/Antman1526/CodeVisualizerPlus](https://github.com/Antman1526/CodeVisualizerPlus)
 
-- **Issues (this fork):** [GitHub Issues](https://github.com/Antman1526/CodeVisualizer/issues)
+- **Issues (this fork):** [GitHub Issues](https://github.com/Antman1526/CodeVisualizerPlus/issues)
 
 ---
 
@@ -394,15 +394,15 @@ Distributed under the MIT License. See `LICENSE` for details.
 ---
 
 <!-- MARKDOWN LINKS -->
-[contributors-shield]: https://img.shields.io/github/contributors/Antman1526/CodeVisualizer.svg?style=for-the-badge
-[contributors-url]: https://github.com/Antman1526/CodeVisualizer/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/Antman1526/CodeVisualizer.svg?style=for-the-badge
-[forks-url]: https://github.com/Antman1526/CodeVisualizer/network/members
-[stars-shield]: https://img.shields.io/github/stars/Antman1526/CodeVisualizer.svg?style=for-the-badge
-[stars-url]: https://github.com/Antman1526/CodeVisualizer/stargazers
-[issues-shield]: https://img.shields.io/github/issues/Antman1526/CodeVisualizer.svg?style=for-the-badge
-[issues-url]: https://github.com/Antman1526/CodeVisualizer/issues
-[license-shield]: https://img.shields.io/github/license/Antman1526/CodeVisualizer.svg?style=for-the-badge
-[license-url]: https://github.com/Antman1526/CodeVisualizer/blob/master/LICENSE
+[contributors-shield]: https://img.shields.io/github/contributors/Antman1526/CodeVisualizerPlus.svg?style=for-the-badge
+[contributors-url]: https://github.com/Antman1526/CodeVisualizerPlus/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/Antman1526/CodeVisualizerPlus.svg?style=for-the-badge
+[forks-url]: https://github.com/Antman1526/CodeVisualizerPlus/network/members
+[stars-shield]: https://img.shields.io/github/stars/Antman1526/CodeVisualizerPlus.svg?style=for-the-badge
+[stars-url]: https://github.com/Antman1526/CodeVisualizerPlus/stargazers
+[issues-shield]: https://img.shields.io/github/issues/Antman1526/CodeVisualizerPlus.svg?style=for-the-badge
+[issues-url]: https://github.com/Antman1526/CodeVisualizerPlus/issues
+[license-shield]: https://img.shields.io/github/license/Antman1526/CodeVisualizerPlus.svg?style=for-the-badge
+[license-url]: https://github.com/Antman1526/CodeVisualizerPlus/blob/master/LICENSE
 [vscode-shield]: https://img.shields.io/badge/VS%20Code-1.105.0+-007ACC?style=for-the-badge&logo=visual-studio-code
 [vscode-url]: https://code.visualstudio.com/
