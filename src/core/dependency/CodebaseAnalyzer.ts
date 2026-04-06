@@ -74,13 +74,15 @@ export class CodebaseAnalyzer {
         for (const entry of entries) {
           const fullPath = path.join(dir, entry.name);
 
-          // Skip node_modules, .git, dist, build, etc.
+          // Skip node_modules, .git, dist, build, vendor, target, etc.
           if (
             entry.name.startsWith(".") ||
             entry.name === "node_modules" ||
             entry.name === "dist" ||
             entry.name === "build" ||
-            entry.name === ".git"
+            entry.name === ".git" ||
+            entry.name === "target" ||   // Rust build output
+            entry.name === "vendor"       // Go vendored deps
           ) {
             continue;
           }
@@ -206,6 +208,107 @@ export class CodebaseAnalyzer {
           valid: resolved !== null,
         });
       }
+    } else if (languageId === "java") {
+      // Extract: import com.example.ClassName;
+      const importRegex = /^\s*import\s+([\w.]+)\s*;/gm;
+      let match;
+      while ((match = importRegex.exec(content)) !== null) {
+        const importPath = match[1];
+        // Skip standard library packages
+        if (
+          importPath.startsWith("java.") ||
+          importPath.startsWith("javax.") ||
+          importPath.startsWith("android.") ||
+          importPath.startsWith("kotlin.")
+        ) {
+          continue;
+        }
+        const resolved = this.resolveJavaImport(importPath, filePath);
+        dependencies.push({
+          module: importPath,
+          resolved,
+          dependencyTypes: ["import"],
+          valid: resolved !== null,
+        });
+      }
+    } else if (languageId === "c" || languageId === "cpp") {
+      // Only local includes: #include "file.h"  (skip <system.h>)
+      const includeRegex = /^\s*#include\s+"([^"]+)"/gm;
+      let match;
+      while ((match = includeRegex.exec(content)) !== null) {
+        const includePath = match[1];
+        const resolved = this.resolveCInclude(includePath, filePath);
+        dependencies.push({
+          module: includePath,
+          resolved,
+          dependencyTypes: ["include"],
+          valid: resolved !== null,
+        });
+      }
+    } else if (languageId === "rust") {
+      let match;
+      // mod declarations: mod name;
+      const modRegex = /^\s*mod\s+(\w+)\s*;/gm;
+      while ((match = modRegex.exec(content)) !== null) {
+        const modName = match[1];
+        const resolved = this.resolveRustModule(modName, filePath);
+        dependencies.push({
+          module: modName,
+          resolved,
+          dependencyTypes: ["mod"],
+          valid: resolved !== null,
+        });
+      }
+      // use crate::, super::, self:: paths
+      const useRegex = /^\s*use\s+((?:crate|super|self)::[^\s;{]+)/gm;
+      while ((match = useRegex.exec(content)) !== null) {
+        const usePath = match[1];
+        const topName = usePath.split("::")[1];
+        if (topName) {
+          const resolved = this.resolveRustModule(topName, filePath);
+          dependencies.push({
+            module: usePath,
+            resolved,
+            dependencyTypes: ["use"],
+            valid: resolved !== null,
+          });
+        }
+      }
+    } else if (languageId === "go") {
+      let match;
+      // Single-line: import "path"
+      const singleImportRegex = /^\s*import\s+"([^"]+)"/gm;
+      while ((match = singleImportRegex.exec(content)) !== null) {
+        const importPath = match[1];
+        const resolved = this.resolveGoImport(importPath, filePath);
+        if (resolved !== null || this.isLocalGoPackage(importPath)) {
+          dependencies.push({
+            module: importPath,
+            resolved,
+            dependencyTypes: ["import"],
+            valid: resolved !== null,
+          });
+        }
+      }
+      // Block imports: import ( "path" )
+      const blockImportRegex = /import\s*\(([\s\S]*?)\)/g;
+      while ((match = blockImportRegex.exec(content)) !== null) {
+        const block = match[1];
+        const pathRegex = /"([^"]+)"/g;
+        let pathMatch;
+        while ((pathMatch = pathRegex.exec(block)) !== null) {
+          const importPath = pathMatch[1];
+          const resolved = this.resolveGoImport(importPath, filePath);
+          if (resolved !== null || this.isLocalGoPackage(importPath)) {
+            dependencies.push({
+              module: importPath,
+              resolved,
+              dependencyTypes: ["import"],
+              valid: resolved !== null,
+            });
+          }
+        }
+      }
     } else if (languageId === "markdown") {
       // Extract [text](./relative/path.md) links as dependencies
       const linkRegex = /(?<!\!)\[([^\]]*)\]\(([^)\s"#]+)(?:\s+"[^"]*")?\)/g;
@@ -294,6 +397,94 @@ export class CodebaseAnalyzer {
     }
   }
 
+  private resolveJavaImport(importPath: string, fromFile: string): string | null {
+    // Convert com.example.ClassName → com/example/ClassName.java
+    const relativePath = importPath.replace(/\./g, path.sep) + ".java";
+    // Search common Java source roots
+    const searchRoots = [
+      this.workspaceRoot,
+      path.join(this.workspaceRoot, "src"),
+      path.join(this.workspaceRoot, "src", "main", "java"),
+      path.join(this.workspaceRoot, "app", "src", "main", "java"),
+    ];
+    for (const root of searchRoots) {
+      const candidate = path.join(root, relativePath);
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  private resolveCInclude(includePath: string, fromFile: string): string | null {
+    const fromDir = path.dirname(fromFile);
+    // Search order: same dir, workspace root, common include dirs
+    const searchDirs = [
+      fromDir,
+      this.workspaceRoot,
+      path.join(this.workspaceRoot, "include"),
+      path.join(this.workspaceRoot, "src"),
+      path.join(this.workspaceRoot, "headers"),
+    ];
+    for (const dir of searchDirs) {
+      const candidate = path.join(dir, includePath);
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  private resolveRustModule(modName: string, fromFile: string): string | null {
+    const fromDir = path.dirname(fromFile);
+    try {
+      // Check sibling file: name.rs
+      const siblingFile = path.join(fromDir, modName + ".rs");
+      if (fs.existsSync(siblingFile)) {
+        return siblingFile;
+      }
+      // Check subdir mod: name/mod.rs
+      const modFile = path.join(fromDir, modName, "mod.rs");
+      if (fs.existsSync(modFile)) {
+        return modFile;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private isLocalGoPackage(importPath: string): boolean {
+    // A local package has no dot in the first path segment (e.g. "utils/helper")
+    const firstSegment = importPath.split("/")[0];
+    return !firstSegment.includes(".");
+  }
+
+  private resolveGoImport(importPath: string, fromFile: string): string | null {
+    // Skip standard library (no dots in first segment) and external packages (have dots)
+    const firstSegment = importPath.split("/")[0];
+    if (firstSegment.includes(".")) {
+      return null; // external package (github.com/..., etc.)
+    }
+
+    // Try to find corresponding directory in workspace
+    const candidate = path.join(this.workspaceRoot, importPath);
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      // Return a representative .go file in that dir
+      try {
+        const entries = fs.readdirSync(candidate);
+        const goFile = entries.find(e => e.endsWith(".go") && !e.endsWith("_test.go"));
+        if (goFile) {
+          return path.join(candidate, goFile);
+        }
+      } catch {
+        // ignore
+      }
+      return candidate;
+    }
+    return null;
+  }
+
   private resolvePythonModule(modulePath: string, fromFile: string): string | null {
     // Skip standard library
     if (!modulePath.includes("/") && !modulePath.includes("\\")) {
@@ -358,6 +549,38 @@ export class CodebaseAnalyzer {
       while ((match = funcRegex.exec(content)) !== null) {
         functions.push(match[1]);
       }
+    } else if (languageId === "java") {
+      // public/private/protected [static] [returnType] methodName(
+      const methodRegex = /(?:public|private|protected)\s+(?:static\s+)?(?:\w+[\w<>\[\]]*\s+)?(\w+)\s*\(/g;
+      let match;
+      while ((match = methodRegex.exec(content)) !== null) {
+        if (match[1] !== "if" && match[1] !== "while" && match[1] !== "for" && match[1] !== "switch") {
+          functions.push(match[1]);
+        }
+      }
+    } else if (languageId === "c" || languageId === "cpp") {
+      // Return type followed by function name and (
+      const funcRegex = /^[\w\s*&]+\s+(\w+)\s*\([^;]*\)\s*(?:const\s*)?\{/gm;
+      let match;
+      while ((match = funcRegex.exec(content)) !== null) {
+        const name = match[1];
+        if (name && !/^(if|for|while|switch|return)$/.test(name)) {
+          functions.push(name);
+        }
+      }
+    } else if (languageId === "rust") {
+      const funcRegex = /(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*[(<]/g;
+      let match;
+      while ((match = funcRegex.exec(content)) !== null) {
+        functions.push(match[1]);
+      }
+    } else if (languageId === "go") {
+      // func [receiver] FuncName(
+      const funcRegex = /^func\s+(?:\(\w+\s+[\w*]+\)\s+)?(\w+)\s*\(/gm;
+      let match;
+      while ((match = funcRegex.exec(content)) !== null) {
+        functions.push(match[1]);
+      }
     }
 
     return functions;
@@ -380,6 +603,40 @@ export class CodebaseAnalyzer {
       if (match) {
         const items = match[1].split(",").map(s => s.trim().replace(/['"]/g, ""));
         exports.push(...items);
+      }
+    } else if (languageId === "java") {
+      // Public top-level types: public class/interface/enum/record Name
+      const publicTypeRegex = /\bpublic\s+(?:(?:abstract|final|sealed)\s+)?(?:class|interface|enum|record)\s+(\w+)/g;
+      let match;
+      while ((match = publicTypeRegex.exec(content)) !== null) {
+        exports.push(match[1]);
+      }
+      // Public methods at top level
+      const publicMethodRegex = /\bpublic\s+(?:static\s+)?(?:\w+[\w<>\[\]]*\s+)?(\w+)\s*\(/g;
+      while ((match = publicMethodRegex.exec(content)) !== null) {
+        const name = match[1];
+        if (name && !/^(if|for|while|switch|class|interface|enum|record)$/.test(name)) {
+          exports.push(name);
+        }
+      }
+    } else if (languageId === "rust") {
+      // pub fn / pub struct / pub enum / pub trait / pub type / pub const / pub mod
+      const pubRegex = /\bpub\s+(?:async\s+)?(?:fn|struct|enum|trait|type|const|mod)\s+(\w+)/g;
+      let match;
+      while ((match = pubRegex.exec(content)) !== null) {
+        exports.push(match[1]);
+      }
+    } else if (languageId === "go") {
+      // In Go, exported names start with uppercase: func UpperName(
+      const exportedFuncRegex = /^func\s+(?:\(\w+\s+[\w*]+\)\s+)?([A-Z]\w*)\s*\(/gm;
+      let match;
+      while ((match = exportedFuncRegex.exec(content)) !== null) {
+        exports.push(match[1]);
+      }
+      // Exported types: type UpperName struct/interface
+      const exportedTypeRegex = /^type\s+([A-Z]\w*)\s+(?:struct|interface)/gm;
+      while ((match = exportedTypeRegex.exec(content)) !== null) {
+        exports.push(match[1]);
       }
     }
 
